@@ -531,7 +531,7 @@ if __name__ == "__main__":
         )
     dia_pipeline = Pipeline.from_pretrained(
         "pyannote/speaker-diarization-3.1",
-        use_auth_token=cfg["huggingface_token"],
+        token=cfg["huggingface_token"],
     )
     dia_pipeline.to(device)
 
