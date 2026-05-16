@@ -441,7 +441,7 @@ def main_process(audio_path, save_path=None, audio_name=None):
     filtered_list = filter(mos_list)
 
     logger.info("Step 6: write result into MP3 and JSON file")
-    export_to_mp3(audio, filtered_list, save_path, audio_name)
+    export_to_wav(audio, filtered_list, save_path, audio_name)
 
     final_path = os.path.join(save_path, audio_name + ".json")
     with open(final_path, "w") as f:
@@ -460,9 +460,15 @@ if __name__ == "__main__":
         help="input folder path, this will override config if set",
     )
     parser.add_argument(
+        "--save_path",                          # ← NEW
+        type=str,
+        default="",
+        help="output folder path to save processed audio and JSON",
+    )
+    parser.add_argument(
         "--config_path", type=str, default="config.json", help="config path"
     )
-    parser.add_argument("--batch_size", type=int, default=16, help="batch size")
+    parser.add_argument("--batch_size", type=int, default=8, help="batch size")
     parser.add_argument(
         "--compute_type",
         type=str,
@@ -472,7 +478,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--whisper_arch",
         type=str,
-        default="medium",
+        default="large-v3",
         help="The name of the Whisper model to load.",
     )
     parser.add_argument(
@@ -535,6 +541,7 @@ if __name__ == "__main__":
         args.whisper_arch,
         device_name,
         compute_type=args.compute_type,
+        language="ta",
         threads=args.threads,
         asr_options={
             "initial_prompt": "Um, Uh, Ah. Like, you know. I mean, right. Actually. Basically, and right? okay. Alright. Emm. So. Oh. 生于忧患,死于安乐。岂不快哉?当然,嗯,呃,就,这样,那个,哪个,啊,呀,哎呀,哎哟,唉哇,啧,唷,哟,噫!微斯人,吾谁与归?ええと、あの、ま、そう、ええ。äh, hm, so, tja, halt, eigentlich. euh, quoi, bah, ben, tu vois, tu sais, t'sais, eh bien, du coup. genre, comme, style. 응,어,그,음."
@@ -570,5 +577,32 @@ if __name__ == "__main__":
     audio_paths = get_audio_files(input_folder_path)  # Get all audio files
     logger.debug(f"Scanning {len(audio_paths)} audio files in {input_folder_path}")
 
-    for path in audio_paths:
-        main_process(path)
+    # NEW:
+    from tqdm.auto import tqdm as tqdm_auto
+    
+    total_files = len(audio_paths)
+    pbar = tqdm_auto(
+        audio_paths,
+        total=total_files,
+        desc="Processing Tamil audios",
+        unit="file",
+        dynamic_ncols=True,
+    )
+    
+    for path in pbar:
+        audio_name = os.path.splitext(os.path.basename(path))[0]
+        out_path = os.path.join(args.save_path, audio_name) if args.save_path else None
+
+        pbar.set_postfix({
+            "current": audio_name[:30],
+            "left"   : total_files - pbar.n,
+        })
+        
+        final_path, filtered_list = main_process(path, save_path=out_path)
+
+        # log segments count after each file
+        pbar.set_postfix({
+            "current" : audio_name[:30],
+            "segments": len(filtered_list),     # ← how many clips saved
+            "left"    : total_files - pbar.n,
+        })
