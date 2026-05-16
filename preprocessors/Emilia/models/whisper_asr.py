@@ -4,14 +4,23 @@
 # LICENSE file in the root directory of this source tree.
 
 import faster_whisper
-from typing import List, Union, Optional, NamedTuple
+from typing import List, Union, Optional, NamedTuple, TypedDict
 import torch
 import numpy as np
 import tqdm
 from whisperx.audio import N_SAMPLES, SAMPLE_RATE, load_audio, log_mel_spectrogram
-from whisperx.types import TranscriptionResult, SingleSegment
+# from whisperx.types import TranscriptionResult, SingleSegment
 from whisperx.asr import WhisperModel, FasterWhisperPipeline, find_numeral_symbol_tokens
 
+class SingleSegment(TypedDict, total=False):
+    text: str
+    start: float
+    end: float
+    speaker: Optional[str]
+ 
+class TranscriptionResult(TypedDict):
+    segments: List[SingleSegment]
+    language: str
 
 class VadFreeFasterWhisperPipeline(FasterWhisperPipeline):
     """
