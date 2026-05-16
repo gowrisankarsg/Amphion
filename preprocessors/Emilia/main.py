@@ -18,6 +18,7 @@ import pandas as pd
 
 from utils.tool import (
     export_to_mp3,
+    export_to_wav,
     load_cfg,
     get_audio_files,
     detect_gpu,
