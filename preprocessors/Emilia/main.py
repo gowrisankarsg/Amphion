@@ -152,29 +152,18 @@ def speaker_diarization(audio):
         }
     )
 
-    # ── Patch: support both old Annotation and new DiarizeOutput ──
-    try:
-        # old pyannote API (< 3.1) — Annotation object with itertracks()
-        diarize_df = pd.DataFrame(
-            segments.itertracks(yield_label=True),
-            columns=["segment", "label", "speaker"],
-        )
-        diarize_df["start"] = diarize_df["segment"].apply(lambda x: x.start)
-        diarize_df["end"]   = diarize_df["segment"].apply(lambda x: x.end)
+    # unwrap DiarizeOutput → Annotation (newer pyannote versions)
+    if hasattr(segments, "annotation"):
+        annotation = segments.annotation
+    elif hasattr(segments, "diarization"):
+        annotation = segments.diarization
+    else:
+        annotation = segments   # already Annotation object (old pyannote)
 
-    except AttributeError:
-        # new pyannote API (>= 3.1) — DiarizeOutput, iterate directly
-        rows = []
-        for segment, label, speaker in segments.itertracks(yield_label=True) \
-                if hasattr(segments, "itertracks") \
-                else [(turn, None, speaker)
-                      for turn, speaker in segments]:
-            rows.append({
-                "start"  : segment.start,
-                "end"    : segment.end,
-                "speaker": speaker,
-            })
-        diarize_df = pd.DataFrame(rows)
+    rows = []
+    for turn, _, speaker in annotation.itertracks(yield_label=True):
+        rows.append({"start": turn.start, "end": turn.end, "speaker": speaker})
+    diarize_df = pd.DataFrame(rows)
 
     logger.debug(f"diarize_df: {diarize_df}")
 
