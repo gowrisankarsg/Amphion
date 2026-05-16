@@ -152,13 +152,8 @@ def speaker_diarization(audio):
         }
     )
 
-    # unwrap DiarizeOutput → Annotation (newer pyannote versions)
-    if hasattr(segments, "annotation"):
-        annotation = segments.annotation
-    elif hasattr(segments, "diarization"):
-        annotation = segments.diarization
-    else:
-        annotation = segments   # already Annotation object (old pyannote)
+    # extract Annotation from DiarizeOutput (pyannoteAI >= 3.x)
+    annotation = segments.speaker_diarization
 
     rows = []
     for turn, _, speaker in annotation.itertracks(yield_label=True):
