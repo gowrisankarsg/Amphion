@@ -7,6 +7,6 @@ export CUDA_VISIBLE_DEVICES=0
 python main.py \
     --save_path         /kaggle/temp/maskgct_openslr \
     --whisper_arch      large-v3 \
-    --compute_type      float16 \
-    --batch_size        8 \
-    --threads           4
+    --compute_type      int8 \
+    --batch_size        1 \
+    --threads           8
