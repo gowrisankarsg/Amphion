@@ -27,7 +27,7 @@
         }
     },
     "mos_model": { 
-        "primary_model_path": "/kaggle/working/sig_bak_ovr.onnx" // "/path/to/model/mos_model/DNSMOS/sig_bak_ovr.onnx"
+        "primary_model_path": "/kaggle/working/sig_bak_ovr.onnx" 
     },
     "huggingface_token": "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"
 }
