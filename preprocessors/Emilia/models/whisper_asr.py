@@ -287,6 +287,8 @@ def load_asr_model(
         "max_new_tokens": None,
         "clip_timestamps": None,
         "hallucination_silence_threshold": None,
+        "multilingual": False,        # ← ADD THIS
+        "hotwords": None,             # ← ADD THIS
     }
 
     if asr_options is not None:
