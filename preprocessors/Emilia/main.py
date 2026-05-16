@@ -555,7 +555,7 @@ if __name__ == "__main__":
     logger.debug(" * Loading ASR Model")
     asr_model = whisper_asr.load_asr_model(
         args.whisper_arch,
-        device_name,
+        "cpu",
         compute_type=args.compute_type,
         language="ta",
         threads=args.threads,
