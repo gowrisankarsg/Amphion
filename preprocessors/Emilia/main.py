@@ -316,23 +316,23 @@ def asr(vad_segments, audio):
         return all_transcribe_result
     else:
         logger.debug("Multilingual flag is off")
-        language, prob = asr_model.detect_language(temp_audio)
-        if language in supported_languages and prob > 0.8:
-            transcribe_result = asr_model.transcribe(
-                temp_audio,
-                vad_segments,
-                batch_size=batch_size,
-                language=language,
-                print_progress=True,
-            )
-            result = transcribe_result["segments"]
-            for idx, segment in enumerate(result):
-                result[idx]["start"] += start_time
-                result[idx]["end"] += start_time
-                result[idx]["language"] = transcribe_result["language"]
-            return result
-        else:
-            return []
+        # language, prob = asr_model.detect_language(temp_audio)
+        # if language in supported_languages and prob > 0.8:
+        transcribe_result = asr_model.transcribe(
+            temp_audio,
+            vad_segments,
+            batch_size=batch_size,
+            language="ta",
+            print_progress=True,
+        )
+        result = transcribe_result["segments"]
+        for idx, segment in enumerate(result):
+            result[idx]["start"] += start_time
+            result[idx]["end"] += start_time
+            result[idx]["language"] = transcribe_result["language"]
+        return result
+        # else:
+        #     return []
 
 
 @time_logger
@@ -379,9 +379,15 @@ def filter(mos_list):
     Returns:
         list: A list of VAD segments with MOS scores above the average MOS.
     """
+    if len(mos_list) == 0:
+        logger.warning("filter() received empty mos_list — skipping filter step")
+        return []
     filtered_audio_stats, all_audio_stats = calculate_audio_stats(mos_list)
     filtered_segment = len(filtered_audio_stats)
     all_segment = len(all_audio_stats)
+    if all_segment == 0:
+        logger.warning("filter() — all_audio_stats is empty after calculate_audio_stats")
+        return []
     logger.debug(
         f"> {all_segment - filtered_segment}/{all_segment} {(all_segment - filtered_segment) / all_segment:.2%} segments filtered."
     )
@@ -432,10 +438,18 @@ def main_process(audio_path, save_path=None, audio_name=None):
     logger.info("Step 4: ASR")
     asr_result = asr(segment_list, audio)
 
+    if len(asr_result) == 0:
+        logger.warning(f"No ASR results for {audio_name} — skipping")
+        return None, []
+
     logger.info("Step 5: Filter")
     logger.info("Step 5.1: calculate mos_prediction")
     avg_mos, mos_list = mos_prediction(audio, asr_result)
 
+    if len(mos_list) == 0:
+        logger.warning(f"No MOS results for {audio_name} — skipping")
+        return None, []
+    
     logger.info(f"Step 5.1: done, average MOS: {avg_mos}")
 
     logger.info("Step 5.2: Filter out files with less than average MOS")
