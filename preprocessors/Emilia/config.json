@@ -12,13 +12,11 @@
         ]
     },
     "entrypoint": {
-        // TODO: Fill in the input_folder_path. 
         "input_folder_path": "/kaggle/input/datasets/gowrisankarsparrow/indextts-tamil-dataset/audio",
         "SAMPLE_RATE": 24000
     },
     "separate": {
         "step1": {
-            // TODO: Fill in the source separation model's path. 
             "model_path": "/kaggle/working/UVR-MDX-NET-Inst_HQ_3.onnx",
             "denoise": true,
             "margin": 44100,
@@ -28,8 +26,7 @@
             "dim_f": 3072
         }
     },
-    "mos_model": {
-        // TODO: Fill in the DNSMOS prediction model's path. 
+    "mos_model": { 
         "primary_model_path": "/kaggle/working/sig_bak_ovr.onnx" // "/path/to/model/mos_model/DNSMOS/sig_bak_ovr.onnx"
     },
     "huggingface_token": "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"
