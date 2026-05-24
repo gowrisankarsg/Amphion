@@ -10,9 +10,10 @@ from models.tts.maskgct.g2p.g2p.english import english_to_ipa
 from models.tts.maskgct.g2p.g2p.french import french_to_ipa
 from models.tts.maskgct.g2p.g2p.korean import korean_to_ipa
 from models.tts.maskgct.g2p.g2p.german import german_to_ipa
+from models.tts.maskgct.g2p.g2p.german import tamil_to_ipa
 
 
-def cjekfd_cleaners(text, sentence, language, text_tokenizers):
+def cjekfdt_cleaners(text, sentence, language, text_tokenizers):
 
     if language == "zh":
         return chinese_to_ipa(text, sentence, text_tokenizers["zh"])
@@ -26,6 +27,8 @@ def cjekfd_cleaners(text, sentence, language, text_tokenizers):
         return korean_to_ipa(text, text_tokenizers["ko"])
     elif language == "de":
         return german_to_ipa(text, text_tokenizers["de"])
+    elif language == "ta":
+        return tamil_to_ipa(text, text_tokenizers["ta"])
     else:
         raise Exception("Unknown language: %s" % language)
         return None
