@@ -40,6 +40,15 @@ def is_alphabet(char):
     else:
         return False
 
+def is_tamil(char):
+
+    if char >= "\u0B80" and char <= "\u0BFF":
+
+        return True
+
+    else:
+
+        return False
 
 def is_other(char):
     if not (is_chinese(char) or is_alphabet(char)):
@@ -62,6 +71,8 @@ def get_segment(text: str) -> List[str]:
             types.append("zh")
         elif is_alphabet(ch):
             types.append("en")
+        elif is_tamil(ch):
+            types.append("ta")
         else:
             types.append("other")
 
@@ -95,7 +106,7 @@ def get_segment(text: str) -> List[str]:
     return segments
 
 
-def chn_eng_g2p(text: str):
+def chn_eng_tam_g2p(text: str):
     # now only en and ch
     segments = get_segment(text)
     all_phoneme = ""
