@@ -10,7 +10,7 @@ from models.tts.maskgct.g2p.g2p.english import english_to_ipa
 from models.tts.maskgct.g2p.g2p.french import french_to_ipa
 from models.tts.maskgct.g2p.g2p.korean import korean_to_ipa
 from models.tts.maskgct.g2p.g2p.german import german_to_ipa
-from models.tts.maskgct.g2p.g2p.german import tamil_to_ipa
+from models.tts.maskgct.g2p.g2p.tamil import tamil_to_ipa
 
 
 def cjekfdt_cleaners(text, sentence, language, text_tokenizers):
