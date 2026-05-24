@@ -28,7 +28,7 @@ def cjekfdt_cleaners(text, sentence, language, text_tokenizers):
     elif language == "de":
         return german_to_ipa(text, text_tokenizers["de"])
     elif language == "ta":
-        return tamil_to_ipa(text, text_tokenizers["ta"])
+        return tamil_to_ipa(text, text_tokenizers.get("ta", None))
     else:
         raise Exception("Unknown language: %s" % language)
         return None
