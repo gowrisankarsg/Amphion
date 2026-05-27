@@ -51,7 +51,7 @@ def is_tamil(char):
         return False
 
 def is_other(char):
-    if not (is_chinese(char) or is_alphabet(char)):
+    if not (is_chinese(char) or is_alphabet(char) or is_tamil(char)):
         return True
     else:
         return False
