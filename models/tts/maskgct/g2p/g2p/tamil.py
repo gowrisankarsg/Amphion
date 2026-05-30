@@ -4,6 +4,34 @@
 # LICENSE file in the root directory of this source tree.
 
 import re
+# At the top of tamil.py, after import re:
+try:
+    from indic_numtowords import num2words as indic_num2words
+    _INDIC_NUM2WORDS = True
+except ImportError:
+    _INDIC_NUM2WORDS = False
+
+_NUMBER_RE = re.compile(r'\d+(?:[.,]\d+)*')
+
+def _normalize_numbers_tamil(text: str) -> str:
+    """
+    Replace digit sequences in Tamil text with Tamil words.
+    Example: "5 கிலோ" → "ஐந்து கிலோ"
+             "999 ரூபாய்" → "தொள்ளாயிரத்து தொண்ணூற்றொன்பது ரூபாய்"
+    Falls back to leaving digits as-is if indic_numtowords not installed.
+    """
+    if not _INDIC_NUM2WORDS:
+        return text
+
+    def replace_match(m):
+        num_str = m.group(0).replace(',', '')  # remove thousand separators
+        try:
+            num = int(num_str)
+            return indic_num2words(num, lang='ta')
+        except (ValueError, Exception):
+            return m.group(0)  # leave as-is if conversion fails
+
+    return _NUMBER_RE.sub(replace_match, text)
 
 # 1. அடிப்படை உயிரெழுத்துக்கள் (Vowels) மற்றும் ஐ, ஔ (Diphthongs)
 TAMIL_VOWELS = {
@@ -207,6 +235,8 @@ def tamil_to_ipa(text, text_tokenizer=None):
         return [tamil_to_ipa(t, text_tokenizer) for t in text]
 
     text = re.sub(r'\s+', ' ', text).strip()
+
+    text = _normalize_numbers_tamil(text)
 
     # ------------------------------------------------------------------ #
     # Step 1: tokenise words and pre-split punctuation                    #
