@@ -118,7 +118,7 @@ def chn_eng_tam_g2p(text: str):
         all_phoneme += phoneme + "|"
         all_tokens += token
 
-        if seg[1] == "en" and index == len(segments) - 1 and all_phoneme[-2] == "_":
+        if seg[1] in ("en","ta") and index == len(segments) - 1 and all_phoneme[-2] == "_":
             all_phoneme = all_phoneme[:-2]
             all_tokens = all_tokens[:-1]
     return all_phoneme, all_tokens
