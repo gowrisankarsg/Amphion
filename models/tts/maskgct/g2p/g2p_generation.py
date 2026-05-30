@@ -115,6 +115,23 @@ def chn_eng_tam_g2p(text: str):
     for index in range(len(segments)):
         seg = segments[index]
         phoneme, token = g2p(seg[0], text, seg[1])
+
+        # ── FIX ──────────────────────────────────────────────────────────────
+        # Insert a word-boundary '_' when a non-English segment is immediately
+        # followed by an English segment.
+        #
+        # English → non-English is already correct: english_to_ipa appends |_
+        # to its output, and the joining '|' below turns that into _|, which
+        # together reads as the proper |_| word boundary.
+        #
+        # non-English → English has no such trailing marker, so we add it here.
+        # ─────────────────────────────────────────────────────────────────────
+        if (index > 0
+                and seg[1] == "en"
+                and segments[index - 1][1] != "en"):
+            all_phoneme += "_|"
+            all_tokens.append(vocab["_"])   # vocab["_"] == 4
+        
         all_phoneme += phoneme + "|"
         all_tokens += token
 
