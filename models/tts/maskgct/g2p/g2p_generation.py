@@ -121,6 +121,9 @@ def chn_eng_tam_g2p(text: str):
         if seg[1] in ("en","ta") and index == len(segments) - 1 and all_phoneme[-2] == "_":
             all_phoneme = all_phoneme[:-2]
             all_tokens = all_tokens[:-1]
+        elif seg[1] == "ta":
+            # For Tamil (and Chinese ending with punct), strip the trailing |
+            all_phoneme = all_phoneme.rstrip("|")
     return all_phoneme, all_tokens
 
 
