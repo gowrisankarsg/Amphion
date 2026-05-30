@@ -301,7 +301,22 @@ def tamil_to_ipa(text, text_tokenizer=None):
 
     # Build the final string: phonemes delimited by |, words by |_|
     # Punctuation is treated as a single-token word (like Chinese/English).
-    final_ipa = '|_|'.join(final_parts)
+    #final_ipa = '|_|'.join(final_parts)
+
+    result = []
+    for i, part in enumerate(final_parts):
+        result.append(part)
+        if i < len(final_parts) - 1:
+            next_part = final_parts[i + 1]
+            curr_is_punct = len(part) == 1 and part in _PUNCT
+            next_is_punct = len(next_part) == 1 and next_part in _PUNCT
+            # Punct joins directly with | like English, no _
+            if curr_is_punct or next_is_punct:
+                result.append('|')
+            else:
+                result.append('|_|')
+    
+    final_ipa = ''.join(result)
 
     # One last safety pass: collapse any double pipes that might arise
     # at the seam between a punctuation token and a word token.
