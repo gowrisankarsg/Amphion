@@ -26,3 +26,4 @@ tqdm
 spaces
 gradio
 openai-whisper
+indic-numtowords
