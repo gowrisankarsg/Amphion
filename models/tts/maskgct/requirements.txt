@@ -14,7 +14,7 @@ g2p_en
 jieba
 cn2an
 pypinyin
-LangSegment
+#LangSegment
 pyopenjtalk
 pykakasi
 
