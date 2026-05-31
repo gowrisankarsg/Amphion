@@ -162,6 +162,15 @@ def parse_args() -> argparse.Namespace:
 # Helpers
 # ══════════════════════════════════════════════════════════════════════════════
 
+# ── Add this helper near the top of process_manifest() ──────────────────────
+def get_uid(rec: dict) -> Optional[str]:
+    """Extract unique ID — tries 'id', 'speaker', 'speaker_id' in order."""
+    return rec.get("id") or rec.get("speaker") or rec.get("speaker_id")
+
+def get_audio_field(rec: dict) -> str:
+    """Extract audio path — tries 'audio', then 'audio_path'."""
+    return rec.get("audio") or rec.get("audio_path") or ""
+
 def parse_manifest_specs(entries: List[str]) -> List[Tuple[Path, Optional[str]]]:
     result = []
     for raw in entries:
@@ -405,7 +414,7 @@ def process_manifest(
                        code_len: int, phone_len: int,
                        stem: str, duration: float) -> None:
         train_f, val_f, train_ids, val_ids = mhandles(lang)
-        uid = rec.get("id") or rec.get("speaker") or rec.get("speaker_id")
+        uid = get_uid(rec)
         if uid in train_ids or uid in val_ids:
             return  # already written in a previous run
         entry = {
@@ -471,7 +480,7 @@ def process_manifest(
     g2p_ok: Dict[str, Tuple[str, np.ndarray]] = {}
 
     for rec in tqdm(records, desc="  G2P", unit="utt", leave=False):
-        uid   = rec.get("id") or rec.get("speaker") or rec.get("speaker_id")
+        uid   = get_uid(rec)
         lang  = rec.get("language", default_lang).lower()
         stem  = audio_stem(rec.get("audio","audio_path"))          # ← filename stem of audio
 
@@ -533,7 +542,7 @@ def process_manifest(
             return
 
         for i, rec in enumerate(batch_recs):
-            uid  = rec.get("id") or rec.get("speaker") or rec.get("speaker_id")
+            uid  = get_uid(rec)
             lang = rec.get("language", default_lang).lower()
             stem, phone_ids = g2p_ok[uid]
             codes_dir, _ = lang_dirs(lang)
@@ -569,7 +578,7 @@ def process_manifest(
         batch_wavs.clear(); batch_recs.clear(); batch_durs.clear()
 
     for rec in tqdm(work, desc="  Codes", unit="utt", leave=False):
-        uid  = rec.get("id") or rec.get("speaker") or rec.get("speaker_id")
+        uid  = get_uid(rec)
         lang = rec.get("language", default_lang).lower()
         stem, phone_ids = g2p_ok[uid]
         codes_dir, _ = lang_dirs(lang)
@@ -586,7 +595,7 @@ def process_manifest(
             continue
 
         # Resolve audio
-        audio_field = rec.get("audio", "audio_path")
+        audio_field = get_audio_field(rec)
         audio_path  = resolve_audio(audio_field, manifest_dir, args.audio_root)
         if audio_path is None:
             print(f"\n  [Skip] Audio not found: '{audio_field}'  id={uid}")
