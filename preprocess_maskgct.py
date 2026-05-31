@@ -75,7 +75,7 @@ from transformers import SeamlessM4TFeatureExtractor
 import safetensors.torch
 from huggingface_hub import hf_hub_download
 
-from models.tts.maskgct.maskgct_utils import build_semantic_codec, build_semantic_model
+from models.tts.maskgct.maskgct_utils import build_semantic_codec, build_semantic_model,load_config
 # chn_eng_tam_g2p handles Tamil + English + Chinese in one call.
 # It is the module-level function in g2p_generation.py — importing it also
 # triggers the module-level PhonemeBpeTokenizer + vocab.json load at the
@@ -254,13 +254,16 @@ class SemanticExtractor:
         )
 
         self.semantic_model, self.semantic_mean, self.semantic_std = (
-            build_semantic_model()
+            build_semantic_model(self.device)
         )
         self.semantic_model = self.semantic_model.to(device).eval()
         self.semantic_mean  = self.semantic_mean.to(device)
         self.semantic_std   = self.semantic_std.to(device)
 
-        self.semantic_codec = build_semantic_codec()
+        self.semantic_codec = build_semantic_codec(
+          load_config("./models/tts/maskgct/config/maskgct.json"),
+          self.device
+        )
         if codec_ckpt is None:
             print("[Codec] Downloading amphion/MaskGCT semantic_codec from HuggingFace ...")
             codec_ckpt = Path(hf_hub_download(
