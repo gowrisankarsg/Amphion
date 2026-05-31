@@ -428,7 +428,7 @@ def process_manifest(
             "phone_len":           phone_len,
             # informational — not used by the trainer
             "text":                rec.get("text", ""),
-            "audio":               rec.get("audio", "audio_path"),
+            "audio":               get_audio_field(rec),
             "duration":            round(duration, 3),
         }
         line = json.dumps(entry, ensure_ascii=False) + "\n"
@@ -482,7 +482,7 @@ def process_manifest(
     for rec in tqdm(records, desc="  G2P", unit="utt", leave=False):
         uid   = get_uid(rec)
         lang  = rec.get("language", default_lang).lower()
-        stem  = audio_stem(rec.get("audio","audio_path"))          # ← filename stem of audio
+        stem  = audio_stem(get_audio_field(rec))          # ← filename stem of audio
 
         codes_dir, phones_dir = lang_dirs(lang)
         phones_path = phones_dir / f"{stem}.npy"
@@ -524,7 +524,7 @@ def process_manifest(
     print("  [Pass 2/2] Semantic codes → codes/<audioname>.npy ...")
 
     # Only process records that have valid phone IDs
-    work = [r for r in records if r["id"] in g2p_ok]
+    work = [r for r in records if get_uid(r) in g2p_ok]
 
     batch_wavs: List[torch.Tensor] = []
     batch_recs: List[dict]         = []
