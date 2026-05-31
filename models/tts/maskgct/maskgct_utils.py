@@ -47,7 +47,7 @@ def build_semantic_model(device):
     semantic_model = Wav2Vec2BertModel.from_pretrained("facebook/w2v-bert-2.0")
     semantic_model.eval()
     semantic_model.to(device)
-    stat_mean_var = torch.load("./models/tts/maskgct/ckpt/wav2vec2bert_stats.pt")
+    stat_mean_var = torch.load("./models/tts/maskgct/ckpt/wav2vec2bert_stats.pt", weights_only=False)
     semantic_mean = stat_mean_var["mean"]
     semantic_std = torch.sqrt(stat_mean_var["var"])
     semantic_mean = semantic_mean.to(device)
