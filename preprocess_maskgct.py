@@ -406,6 +406,8 @@ def process_manifest(
                        stem: str, duration: float) -> None:
         train_f, val_f, train_ids, val_ids = mhandles(lang)
         uid = rec["id"]
+        if not uid:
+          uid = rec.get("speaker", "speaker_id")
         if uid in train_ids or uid in val_ids:
             return  # already written in a previous run
         entry = {
@@ -440,7 +442,7 @@ def process_manifest(
             except json.JSONDecodeError as e:
                 print(f"  [Skip] line {lineno} JSON error: {e}")
                 continue
-            for field in ("id", "audio", "text"):
+            for field in ("audio", "text", "audio_path"):
                 if field not in rec:
                     print(f"  [Skip] line {lineno}: missing '{field}' field")
                     break
@@ -466,6 +468,8 @@ def process_manifest(
 
     for rec in tqdm(records, desc="  G2P", unit="utt", leave=False):
         uid   = rec["id"]
+        if not uid:
+          uid = rec.get("speaker", "speaker_id")
         lang  = rec.get("language", default_lang).lower()
         stem  = audio_stem(rec.get("audio","audio_path"))          # ← filename stem of audio
 
@@ -528,6 +532,8 @@ def process_manifest(
 
         for i, rec in enumerate(batch_recs):
             uid  = rec["id"]
+            if not uid:
+              uid = rec.get("speaker", "speaker_id")
             lang = rec.get("language", default_lang).lower()
             stem, phone_ids = g2p_ok[uid]
             codes_dir, _ = lang_dirs(lang)
@@ -564,6 +570,8 @@ def process_manifest(
 
     for rec in tqdm(work, desc="  Codes", unit="utt", leave=False):
         uid  = rec["id"]
+        if not uid:
+          uid = rec.get("speaker", "speaker_id")
         lang = rec.get("language", default_lang).lower()
         stem, phone_ids = g2p_ok[uid]
         codes_dir, _ = lang_dirs(lang)
