@@ -260,8 +260,9 @@ class SemanticExtractor:
         self.semantic_mean  = self.semantic_mean.to(device)
         self.semantic_std   = self.semantic_std.to(device)
 
+        self.cfg = load_config("./models/tts/maskgct/config/maskgct.json")
         self.semantic_codec = build_semantic_codec(
-          load_config("./models/tts/maskgct/config/maskgct.json"),
+          self.cfg.model.semantic_codec,
           self.device
         )
         if codec_ckpt is None:
