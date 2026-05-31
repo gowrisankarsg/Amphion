@@ -442,9 +442,15 @@ def process_manifest(
             except json.JSONDecodeError as e:
                 print(f"  [Skip] line {lineno} JSON error: {e}")
                 continue
-            for field in ("audio", "text", "audio_path"):
-                if field not in rec:
-                    print(f"  [Skip] line {lineno}: missing '{field}' field")
+            required_groups = [
+                ("id", "speaker", "speaker_id"),
+                ("audio", "audio_path"),
+                ("text",)
+            ]
+            
+            for fields in required_groups:
+                if not any(field in rec for field in fields):
+                    print(f"  [Skip] line {lineno}: missing one of {fields}")
                     break
             else:
                 records.append(rec)
