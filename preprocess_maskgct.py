@@ -415,7 +415,7 @@ def process_manifest(
             "phone_len":           phone_len,
             # informational — not used by the trainer
             "text":                rec.get("text", ""),
-            "audio":               rec.get("audio", ""),
+            "audio":               rec.get("audio", "audio_path"),
             "duration":            round(duration, 3),
         }
         line = json.dumps(entry, ensure_ascii=False) + "\n"
@@ -463,7 +463,7 @@ def process_manifest(
     for rec in tqdm(records, desc="  G2P", unit="utt", leave=False):
         uid   = rec["id"]
         lang  = rec.get("language", default_lang).lower()
-        stem  = audio_stem(rec["audio"])          # ← filename stem of audio
+        stem  = audio_stem(rec.get("audio","audio_path"))          # ← filename stem of audio
 
         codes_dir, phones_dir = lang_dirs(lang)
         phones_path = phones_dir / f"{stem}.npy"
@@ -576,7 +576,7 @@ def process_manifest(
             continue
 
         # Resolve audio
-        audio_field = rec.get("audio", "")
+        audio_field = rec.get("audio", "audio_path")
         audio_path  = resolve_audio(audio_field, manifest_dir, args.audio_root)
         if audio_path is None:
             print(f"\n  [Skip] Audio not found: '{audio_field}'  id={uid}")
