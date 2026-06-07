@@ -236,6 +236,8 @@ def tamil_to_ipa(text, text_tokenizer=None):
 
     text = re.sub(r'\s+', ' ', text).strip()
 
+    text = re.sub(r'\.{2,4}', '…', text)
+
     text = _normalize_numbers_tamil(text)
 
     # ------------------------------------------------------------------ #
