@@ -41,17 +41,41 @@ def is_alphabet(char):
         return False
 
 def is_tamil(char):
-
     if char >= "\u0B80" and char <= "\u0BFF":
-
         return True
-
     else:
+        return False
 
+def is_malayalam(char):
+    if char >= "\u0D00" and char <= "\u0D7F":
+        return True
+    else:
+        return False
+
+def is_telugu(char):
+    if char >= "\u0C00" and char <= "\u0C7F":
+        return True
+    else:
+        return False
+
+def is_kannada(char):
+    if char >= "\u0C80" and char <= "\u0CFF":
+        return True
+    else:
+        return False
+
+def is_hindi(char):
+    # Devanagari Unicode block (used by Hindi)
+    if char >= "\u0900" and char <= "\u097F":
+        return True
+    else:
         return False
 
 def is_other(char):
-    if not (is_chinese(char) or is_alphabet(char) or is_tamil(char)):
+    if not (is_chinese(char) or is_alphabet(char) or is_tamil(char) or 
+           is_malayalam(char) or is_telugu(char) or is_kannada(char) or
+           is_hindi(char) 
+           ):
         return True
     else:
         return False
@@ -73,6 +97,14 @@ def get_segment(text: str) -> List[str]:
             types.append("en")
         elif is_tamil(ch):
             types.append("ta")
+        elif is_malayalam(ch):
+            types.append("ml")
+        elif is_telugu(ch):
+            types.append("te")
+        elif is_kannada(ch):
+            types.append("kn")
+        elif is_hindi(ch):
+            types.append("hi")
         else:
             types.append("other")
 
