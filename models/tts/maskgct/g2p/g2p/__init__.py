@@ -21,7 +21,11 @@ class PhonemeBpeTokenizer:
             "fr": "fr-fr",
             "ko": "ko",
             "de": "de",
-            "ta": "ta"
+            "ta": "ta",
+            "ml": "ml",
+            "te": "te",
+            "kn": "kn",
+            "hi": "hi",
         }
         self.text_tokenizers = {}
         self.int_text_tokenizers()
@@ -30,7 +34,7 @@ class PhonemeBpeTokenizer:
             json_data = f.read()
         data = json.loads(json_data)
         self.vocab = data["vocab"]
-        LangSegment.setfilters(["en", "zh", "ja", "ko", "fr", "de", "ta"])
+        LangSegment.setfilters(["en", "zh", "ja", "ko", "fr", "de", "ta", "ml", "te", "kn", "hi"])
 
     def int_text_tokenizers(self):
         for key, value in self.lang2backend.items():
@@ -46,7 +50,7 @@ class PhonemeBpeTokenizer:
             for seg in seglist:
                 tmp_ph.append(
                     self._clean_text(
-                        seg["text"], sentence, seg["lang"], ["cjekfdt_cleaners"]
+                        seg["text"], sentence, seg["lang"], ["cjekfdin_cleaners"]
                     )
                 )
             phonemes = "|_|".join(tmp_ph)
