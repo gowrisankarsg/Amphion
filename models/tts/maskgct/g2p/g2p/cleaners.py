@@ -17,7 +17,7 @@ from models.tts.maskgct.g2p.g2p.kannada import kannada_to_ipa
 from models.tts.maskgct.g2p.g2p.hindi import hindi_to_ipa
 
 
-def cjekfdt_cleaners(text, sentence, language, text_tokenizers):
+def cjekfdin_cleaners(text, sentence, language, text_tokenizers):
 
     if language == "zh":
         return chinese_to_ipa(text, sentence, text_tokenizers["zh"])
