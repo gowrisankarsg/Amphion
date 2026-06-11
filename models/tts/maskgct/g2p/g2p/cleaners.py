@@ -11,9 +11,13 @@ from models.tts.maskgct.g2p.g2p.french import french_to_ipa
 from models.tts.maskgct.g2p.g2p.korean import korean_to_ipa
 from models.tts.maskgct.g2p.g2p.german import german_to_ipa
 from models.tts.maskgct.g2p.g2p.tamil import tamil_to_ipa
+from models.tts.maskgct.g2p.g2p.malayalam import malayalam_to_ipa
+from models.tts.maskgct.g2p.g2p.telugu import telugu_to_ipa
+from models.tts.maskgct.g2p.g2p.kannada import kannada_to_ipa
+from models.tts.maskgct.g2p.g2p.hindi import hindi_to_ipa
 
 
-def cjekfdt_cleaners(text, sentence, language, text_tokenizers):
+def cjekfdin_cleaners(text, sentence, language, text_tokenizers):
 
     if language == "zh":
         return chinese_to_ipa(text, sentence, text_tokenizers["zh"])
@@ -29,6 +33,14 @@ def cjekfdt_cleaners(text, sentence, language, text_tokenizers):
         return german_to_ipa(text, text_tokenizers["de"])
     elif language == "ta":
         return tamil_to_ipa(text, text_tokenizers.get("ta", None))
+    elif language == "ml":
+        return malayalam_to_ipa(text, text_tokenizers.get("ml", None))
+    elif language == "te":
+        return telugu_to_ipa(text, text_tokenizers.get("te", None))
+    elif language == "kn":
+        return kannada_to_ipa(text, text_tokenizers.get("kn", None))
+    elif language == "hi":
+        return hindi_to_ipa(text, text_tokenizers.get("hi", None))
     else:
         raise Exception("Unknown language: %s" % language)
         return None
