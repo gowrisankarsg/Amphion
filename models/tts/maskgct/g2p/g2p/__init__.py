@@ -55,7 +55,7 @@ class PhonemeBpeTokenizer:
                 )
             phonemes = "|_|".join(tmp_ph)
         else:
-            phonemes = self._clean_text(text, sentence, language, ["cjekfdt_cleaners"])
+            phonemes = self._clean_text(text, sentence, language, ["cjekfdin_cleaners"])
         # print('clean text: ', phonemes)
 
         # 2. tokenize phonemes
