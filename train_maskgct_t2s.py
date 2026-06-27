@@ -70,6 +70,7 @@ from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 from torch.utils.tensorboard import SummaryWriter
 from torch.nn.utils.rnn import pad_sequence
 from transformers import get_cosine_schedule_with_warmup
+from huggingface_hub import hf_hub_download
 import safetensors.torch
 
 from models.tts.maskgct.maskgct_t2s import MaskGCT_T2S
@@ -429,15 +430,17 @@ def _load_t2s_config(cfg_path: Path):
 
 def build_t2s_model(
     cfg_path:        Path,
-    base_checkpoint: Path,
     device:          torch.device,
 ) -> Tuple[MaskGCT_T2S, str, nn.Embedding]:
     t2s_cfg = _load_t2s_config(cfg_path)
     model   = MaskGCT_T2S(cfg=t2s_cfg)
-
-    print(f"[Model] Loading: {base_checkpoint}")
+    # download t2s model ckpt
+    t2s_model_ckpt = hf_hub_download(
+        "amphion/MaskGCT", filename="t2s_model/model.safetensors"
+    )
+    print(f"[Model] Loading: {t2s_model_ckpt}")
     missing, unexpected = safetensors.torch.load_model(
-        model, str(base_checkpoint), strict=False
+        model, t2s_model_ckpt, strict=False
     )
     if missing:
         print(f"  Missing    ({len(missing)}): {missing[:5]}{'...' if len(missing) > 5 else ''}")
@@ -992,7 +995,7 @@ def main() -> None:
     writer = SummaryWriter(log_dir=str(output_dir / "logs" / run_name))
 
     model, phone_attr, phone_emb_mod = build_t2s_model(
-        args.config, args.base_checkpoint, device
+        args.config, device
     )
 
     train_specs   = parse_manifest_specs(args.train_manifests, "--train-manifest")
