@@ -120,7 +120,7 @@ def parse_args() -> argparse.Namespace:
         "--config", type=Path,
         default=Path("models/tts/maskgct/config/maskgct.json"),
     )
-    p.add_argument("--base-checkpoint", type=Path, required=True)
+    
 
     p.add_argument("--ta-phone-offset",    type=int, default=363)
     p.add_argument("--indic-phone-offset", type=int, default=380)
