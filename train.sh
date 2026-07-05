@@ -34,4 +34,5 @@ python train_maskgct_t2s.py \
   --keep-last 3 \
   --ewc-lambda 5000 \
   --amp \
-  --ewc-fisher-batches 10
+  --ewc-fisher-batches 10 \
+  --resume /teamspace/studios/this_studio/output_maskgct_t2s/emergency_step1593.pth
