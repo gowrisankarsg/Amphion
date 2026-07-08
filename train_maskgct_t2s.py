@@ -151,6 +151,12 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--save-every",   type=int, default=1000)
     p.add_argument("--keep-last",    type=int, default=3)
     p.add_argument("--resume",       type=str, default="")
+    p.add_argument(
+        "--init-ckpt",
+        type=str,
+        default="",
+        help="Load model weights only from a checkpoint, but reset optimizer/scheduler/scaler/step."
+    )
 
     return p.parse_args()
 
@@ -1081,7 +1087,21 @@ def main() -> None:
     best_val_loss = math.inf
     recent_ckpts: List[str] = []
 
-    if args.resume:
+    if args.init_ckpt and args.resume:
+      raise ValueError("Use either --init-ckpt or --resume, not both.")
+
+    if args.init_ckpt:
+      ipath = Path(args.init_ckpt).expanduser().resolve()
+      if ipath.exists():
+          print(f"[Init] Loading model-only weights: {ipath}")
+          ckpt = torch.load(ipath, map_location=device, weights_only=False)
+          model.load_state_dict(ckpt["model"], strict=False)
+          del ckpt
+          print("[Init] Optimizer/scheduler/scaler reset. Starting fresh from loaded weights.")
+      else:
+          print(f"[Init] ⚠ Not found: {ipath} — starting from base pretrained weights.")
+    
+    elif args.resume:
         rpath = Path(args.resume).expanduser().resolve()
         if rpath.exists():
             print(f"[Resume] Loading: {rpath}")
