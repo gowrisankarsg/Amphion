@@ -110,7 +110,56 @@ class MaskGCT_T2S(nn.Module):
     def mask_prob(self, t):
         return torch.sin(t * np.pi / 2).to(t.device)
 
-    def forward_diffusion(self, x0, t):
+    # def forward_diffusion(self, x0, t):
+    #     # x0: semantic tokens (B, T)
+    #     new_t = t
+    #     mask_prob = self.mask_prob(new_t)  # (B,)
+    #     # if mask_prob[i] < 0.2, mask_prob[i] = 0.2
+    #     mask_prob = torch.where(
+    #         mask_prob < 0.2, torch.ones_like(mask_prob) * 0.2, mask_prob
+    #     )
+    #     mask_token = self.mask_emb(
+    #         torch.LongTensor([0]).to(x0.device)
+    #     )  # (1, hidden_size)
+
+    #     xt = torch.zeros(x0.shape[0], x0.shape[1], self.hidden_size).to(x0.device)
+
+    #     cfg_scale = self.cfg_scale
+
+    #     #  a segment of r% sequence length is masked, where r ~ U[60, 100]
+    #     if torch.rand(1) > cfg_scale:
+    #         prompt_len = torch.randint(
+    #             min(x0.shape[1] // 4, 5), int(x0.shape[1] * 0.4), (x0.shape[0],)
+    #         ).to(
+    #             x0.device
+    #         )  # (B,)
+    #     else:
+    #         prompt_len = torch.zeros(x0.shape[0]).to(x0)  # (B,)
+
+    #     # get is prompt
+    #     is_prompt = torch.zeros_like(x0[:, :])  # (B, T)
+    #     col_indices = (
+    #         torch.arange(is_prompt.shape[1])
+    #         .repeat(is_prompt.shape[0], 1)
+    #         .to(prompt_len)
+    #     )  # (B, T)
+    #     is_prompt[col_indices < prompt_len.unsqueeze(1)] = 1  # (B, T) 1 if prompt
+
+    #     # Add mask
+    #     mask = torch.bernoulli(torch.ones_like(x0[:, :]) * mask_prob[..., None])
+    #     mask[is_prompt.bool()] = 0
+    #     mask_num = mask[:,].sum(dim=1, keepdim=False)
+    #     all_zero_mask = (mask_num == 0).bool()
+    #     row_indices_to_modify = torch.nonzero(all_zero_mask)
+    #     mask[row_indices_to_modify, prompt_len[row_indices_to_modify]] = 1
+    #     mask = mask[..., None]  # (B, T, 1)
+    #     xt = (
+    #         xt + mask * mask_token[:, None, :] + (1 - mask) * self.cond_emb(x0[:, :])
+    #     )  # (B, T, hidden_size)
+
+    #     return xt, new_t, mask, prompt_len, mask_prob
+
+        def forward_diffusion(self, x0, t):
         # x0: semantic tokens (B, T)
         new_t = t
         mask_prob = self.mask_prob(new_t)  # (B,)
@@ -118,11 +167,9 @@ class MaskGCT_T2S(nn.Module):
         mask_prob = torch.where(
             mask_prob < 0.2, torch.ones_like(mask_prob) * 0.2, mask_prob
         )
-        mask_token = self.mask_emb(
-            torch.LongTensor([0]).to(x0.device)
-        )  # (1, hidden_size)
-
-        xt = torch.zeros(x0.shape[0], x0.shape[1], self.hidden_size).to(x0.device)
+        
+        # FIX 1: Direct weight access (removes CPU-GPU sync)
+        mask_token = self.mask_emb.weight  # (1, hidden_size)
 
         cfg_scale = self.cfg_scale
 
@@ -130,32 +177,30 @@ class MaskGCT_T2S(nn.Module):
         if torch.rand(1) > cfg_scale:
             prompt_len = torch.randint(
                 min(x0.shape[1] // 4, 5), int(x0.shape[1] * 0.4), (x0.shape[0],)
-            ).to(
-                x0.device
-            )  # (B,)
+            ).to(x0.device)  # (B,)
         else:
-            prompt_len = torch.zeros(x0.shape[0]).to(x0)  # (B,)
+            prompt_len = torch.zeros(x0.shape[0]).to(x0.device)  # (B,)
 
-        # get is prompt
-        is_prompt = torch.zeros_like(x0[:, :])  # (B, T)
-        col_indices = (
-            torch.arange(is_prompt.shape[1])
-            .repeat(is_prompt.shape[0], 1)
-            .to(prompt_len)
-        )  # (B, T)
-        is_prompt[col_indices < prompt_len.unsqueeze(1)] = 1  # (B, T) 1 if prompt
+        # FIX 2: Broadcasting instead of repeat + indexing
+        B, T = x0.shape
+        is_prompt = (torch.arange(T, device=x0.device).unsqueeze(0) < prompt_len.unsqueeze(1))  # (B, T) bool
 
         # Add mask
-        mask = torch.bernoulli(torch.ones_like(x0[:, :]) * mask_prob[..., None])
-        mask[is_prompt.bool()] = 0
-        mask_num = mask[:,].sum(dim=1, keepdim=False)
+        mask = torch.bernoulli(torch.ones_like(x0) * mask_prob[..., None])
+        mask[is_prompt] = 0
+        mask_num = mask.sum(dim=1, keepdim=False)
         all_zero_mask = (mask_num == 0).bool()
-        row_indices_to_modify = torch.nonzero(all_zero_mask)
-        mask[row_indices_to_modify, prompt_len[row_indices_to_modify]] = 1
-        mask = mask[..., None]  # (B, T, 1)
-        xt = (
-            xt + mask * mask_token[:, None, :] + (1 - mask) * self.cond_emb(x0[:, :])
-        )  # (B, T, hidden_size)
+        row_indices_to_modify = torch.nonzero(all_zero_mask).squeeze(-1)
+        
+        # Safely handle edge case where row_indices might be empty
+        if row_indices_to_modify.numel() > 0:
+            mask[row_indices_to_modify, prompt_len[row_indices_to_modify]] = 1
+            
+        mask = mask.unsqueeze(-1)  # (B, T, 1)
+        
+        # FIX 3: Remove unnecessary zeros allocation
+        cond = self.cond_emb(x0)  # (B, T, hidden_size)
+        xt = mask * mask_token[None, :, :] + (1 - mask) * cond  # (B, T, hidden_size)
 
         return xt, new_t, mask, prompt_len, mask_prob
 
