@@ -47,6 +47,7 @@ evaluate), v11 (log_interval gating), v10-FIX-A/B (table borders),
 and all prior fixes FIX #1–#7, F1–F11.
 """
 
+
 from __future__ import annotations
 
 import argparse
@@ -58,6 +59,7 @@ import datetime
 import traceback
 from collections import defaultdict
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Sequence, Tuple
 
@@ -121,7 +123,6 @@ def parse_args() -> argparse.Namespace:
         default=Path("models/tts/maskgct/config/maskgct.json"),
     )
     
-
     p.add_argument("--ta-phone-offset",    type=int, default=363)
     p.add_argument("--indic-phone-offset", type=int, default=380)
 
@@ -226,6 +227,14 @@ class T2SDataset(Dataset):
             if idxs:
                 print(f"  [{lang:>4}] {len(idxs):>8,}")
 
+        # FIX: Add LRU cache so workers cache .npy files in RAM instead of reading disk every time
+        self._codes_cache = lru_cache(maxsize=100_000)(self._load_npy)
+        self._phones_cache = lru_cache(maxsize=100_000)(self._load_npy)
+
+    @staticmethod
+    def _load_npy(path_str: str):
+        return np.load(path_str, allow_pickle=False)
+
     def _load_manifest(self, spec: ManifestSpec) -> None:
         if not spec.path.exists():
             raise FileNotFoundError(f"Manifest not found: {spec.path}")
@@ -273,8 +282,9 @@ class T2SDataset(Dataset):
             return None
         sample = self.samples[idx]
         try:
-            codes  = np.load(sample.semantic_codes_path, allow_pickle=False).astype(np.int64)
-            phones = np.load(sample.phone_ids_path,      allow_pickle=False).astype(np.int64)
+            # FIX: Use cached loaders
+            codes  = self._codes_cache(str(sample.semantic_codes_path)).astype(np.int64)
+            phones = self._phones_cache(str(sample.phone_ids_path)).astype(np.int64)
 
             if codes.size == 0 or phones.size == 0:
                 raise ValueError("Empty .npy")
@@ -369,12 +379,6 @@ def build_weighted_sampler(
 # ══════════════════════════════════════════════════════════════════════════════
 
 def _find_phone_embedding(model: MaskGCT_T2S) -> Tuple[str, nn.Embedding]:
-    """
-    Search order:
-    1. Known attribute names (fast path)
-    2. Walk: exact vocab size + padding_idx  (safest fallback)
-    3. Walk: exact vocab size only           (last resort, prints warning)
-    """
     for candidate in ("phone_embedding", "phone_emb", "phone_embed"):
         mod = getattr(model, candidate, None)
         if isinstance(mod, nn.Embedding):
@@ -490,14 +494,6 @@ def register_phone_emb_hook(
     phone_emb_mod: nn.Embedding,
     protect_up_to: int = 362,
 ) -> torch.utils.hooks.RemovableHook:
-    """
-    Zeros gradients for rows 0..protect_up_to after every backward.
-    Only rows 363–392 (new Indic phonemes) accumulate gradients.
-
-    This hook also fires during EWC Fisher estimation, so Fisher for
-    rows 0–362 is zero — EWC won't protect them. This is correct: the
-    hook already prevents their update (a stronger guarantee than EWC).
-    """
     def _zero_pretrained_rows(grad: torch.Tensor) -> torch.Tensor:
         grad = grad.clone()
         grad[: protect_up_to + 1] = 0.0
@@ -583,6 +579,12 @@ class EWC:
         self._fisher = self._compute_fisher(
             model, reference_loader, n_batches, use_amp, amp_dtype
         )
+        
+        # FIX: Pre-flatten fisher and reference params for vectorized penalty
+        self._fisher_names = list(self._fisher.keys())
+        self._flat_fisher  = torch.cat([self._fisher[n].reshape(-1) for n in self._fisher_names])
+        self._flat_ref     = torch.cat([self._params[n].reshape(-1) for n in self._fisher_names])
+        
         print(f"[EWC] Ready. λ={lambda_:.0f} | params tracked: {len(self._fisher)}")
 
     def _compute_fisher(
@@ -634,14 +636,11 @@ class EWC:
         return fisher
 
     def penalty(self, model: MaskGCT_T2S) -> torch.Tensor:
-        loss = torch.tensor(0.0, device=self.device)
-        for name, param in model.named_parameters():
-            if not param.requires_grad or name not in self._fisher:
-                continue
-            loss = loss + (
-                self._fisher[name] * (param - self._params[name]).pow(2)
-            ).sum()
-        return (self.lambda_ / 2.0) * loss
+        # FIX: Vectorized EWC penalty to avoid massive Python loop overhead
+        params_dict = dict(model.named_parameters())
+        flat_param = torch.cat([params_dict[n].detach().reshape(-1) for n in self._fisher_names])
+        penalty = (self._flat_fisher * (flat_param - self._flat_ref).pow(2)).sum()
+        return (self.lambda_ / 2.0) * penalty
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -666,16 +665,6 @@ def _masked_ce_loss_with_raw(
     final_mask: torch.Tensor,   # (B, T, 1)
     x0:         torch.Tensor,   # (B, T)
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """
-    Same as _masked_ce_loss but also returns raw (ce_all, mask_f) for
-    downstream per-lang accumulation without re-running F.cross_entropy.
-
-    [v12-FIX-A] ce_all and mask_f are detached before returning so the
-    autograd graph (including saved logits B×T×V) is freed immediately
-    after loss.backward() — not held across gradient accumulation steps.
-
-    Returns: (loss_scalar, ce_all_BT_detached, mask_f_BT_detached)
-    """
     B, T, V = logits.shape
     mask_f  = final_mask.reshape(B * T)
     ce_all  = F.cross_entropy(
@@ -704,7 +693,6 @@ def per_lang_metrics(
     languages:  List[str],
     device:     torch.device,
 ) -> Dict[str, Dict[str, float]]:
-    """Called only at log_interval steps (training) for live console logging."""
     results: Dict[str, Dict[str, float]] = {}
     for lang in set(languages):
         idx_t = torch.tensor(
@@ -728,21 +716,6 @@ def _accum_epoch_lang_from_raw(
     device:     torch.device,
     epoch_lang: Dict,           # mutated in-place
 ) -> None:
-    """
-    Accumulates raw token-level sums for mathematically correct averages.
-
-    [v13-FIX-A] epoch_lang[lang] stores:
-      [0] sum_raw_token_CE    — Σ ce(token) for valid tokens of this lang
-      [1] sum_correct_tokens  — Σ 1(pred==target) for valid tokens
-      [2] sum_valid_tokens    — Σ mask value (total valid token count)
-
-    Final metrics = [0]/[2] and [1]/[2] → true token-weighted averages
-    regardless of sequence length variation across batches or languages.
-
-    Previous versions (v11/v12) stored token_avg × n_samples in [0]/[1]
-    and n_samples in [2], producing biased sample-weighted averages when
-    sequence lengths were unequal.
-    """
     B, T = x0.shape
     ce_BT   = ce_all.reshape(B, T)
     mask_BT = mask_f.reshape(B, T)
@@ -752,11 +725,11 @@ def _accum_epoch_lang_from_raw(
     for lang in set(languages):
         rows  = [i for i, l in enumerate(languages) if l == lang]
         r     = torch.tensor(rows, device=device)
-        m     = mask_BT[r]                                              # (n, T)
-        epoch_lang[lang][0] += (ce_BT[r] * m).sum().item()             # sum_raw_ce
-        epoch_lang[lang][1] += ((preds[r] == x0[r]).float()
-                                 * mask2d[r]).sum().item()              # sum_correct
-        epoch_lang[lang][2] += m.sum().item()                          # sum_valid_tokens
+        m     = mask_BT[r]
+        # FIX: Keep as tensors! Do not call .item() here
+        epoch_lang[lang][0] += (ce_BT[r] * m).sum()
+        epoch_lang[lang][1] += ((preds[r] == x0[r]).float() * mask2d[r]).sum()
+        epoch_lang[lang][2] += m.sum()
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -847,7 +820,7 @@ def prune_old_checkpoints(recent: List[str], keep_last: int) -> List[str]:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# Validation  [v13-FIX-B] — token-weighted overall metrics from lang_agg sums
+# Validation
 # ══════════════════════════════════════════════════════════════════════════════
 
 @torch.no_grad()
@@ -859,25 +832,10 @@ def evaluate(
     use_amp:   bool        = False,
     amp_dtype: torch.dtype = torch.float32,
 ) -> Dict[str, float]:
-    """
-    Validation loop.  All metrics are true token-weighted averages.
-
-    [v13-FIX-B] overall_loss / overall_acc are now derived from the raw
-    token sums in lang_agg rather than accumulating loss_scalar × bsz.
-    The removed total_loss / total_acc / count variables were biased
-    when sequence lengths varied across batches (sample-weighted instead
-    of token-weighted).
-
-    [v12-FIX-B] Single F.cross_entropy call per batch via
-    _masked_ce_loss_with_raw + _accum_epoch_lang_from_raw.
-
-    Table uses correct widths: PER_LANG_WIDTH=22, top border computed
-    from table_inner_width (v10-FIX-A/B).
-    """
     model.eval()
 
-    # lang_agg[lang] = [sum_raw_token_CE, sum_correct_tokens, sum_valid_tokens]
-    lang_agg: Dict[str, List] = defaultdict(lambda: [0.0, 0.0, 0.0])
+    # FIX: initialize as tensors to avoid syncs
+    lang_agg: Dict[str, List] = defaultdict(lambda: [torch.tensor(0.0, device=device), torch.tensor(0.0, device=device), torch.tensor(0.0, device=device)])
 
     for batch in loader:
         if batch is None:
@@ -892,10 +850,8 @@ def evaluate(
             logits, final_mask, x0 = _model_forward(
                 model, codes, x_mask, phones, phone_mask
             )
-            # [v12-FIX-B] Single CE pass; ce_all/mask_f reused for per-lang agg
             _, ce_all, mask_f = _masked_ce_loss_with_raw(logits, final_mask, x0)
 
-        # Accumulate raw token sums — token-weighted [v13-FIX-B]
         _accum_epoch_lang_from_raw(
             ce_all, mask_f, logits, final_mask, x0,
             languages, device, lang_agg
@@ -903,10 +859,10 @@ def evaluate(
 
     model.train()
 
-    # Derive overall metrics from raw token sums — unbiased [v13-FIX-B]
-    total_sum_ce      = sum(v[0] for v in lang_agg.values())
-    total_sum_correct = sum(v[1] for v in lang_agg.values())
-    total_sum_m       = sum(v[2] for v in lang_agg.values())
+    # FIX: call .item() only once at the end
+    total_sum_ce      = sum(v[0].item() for v in lang_agg.values())
+    total_sum_correct = sum(v[1].item() for v in lang_agg.values())
+    total_sum_m       = sum(v[2].item() for v in lang_agg.values())
 
     if total_sum_m == 0.0:
         print(f"  [Val] Step {step}: no samples.")
@@ -915,11 +871,9 @@ def evaluate(
     overall_loss = total_sum_ce      / total_sum_m
     overall_acc  = total_sum_correct / total_sum_m
 
-    # ── Validation table (v10-FIX-A/B) ──────────────────────────────────────
     present = [l for l in ALL_LANGUAGES if l in lang_agg]
     cw = 10
 
-    # Each lang column pair: f" {field:>{cw}} {field:>{cw}}" = (1+cw)+(1+cw) = 22 chars
     PER_LANG_WIDTH    = 2 + 2 * cw   # 22
     table_inner_width = 6 + PER_LANG_WIDTH * len(present)
 
@@ -929,9 +883,9 @@ def evaluate(
 
     data_inner = f"{'per-lang':<6}"
     for lang in present:
-        sm = max(lang_agg[lang][2], 1e-9)
-        l_val = lang_agg[lang][0] / sm
-        a_val = lang_agg[lang][1] / sm
+        sm = max(lang_agg[lang][2].item(), 1e-9)
+        l_val = lang_agg[lang][0].item() / sm
+        a_val = lang_agg[lang][1].item() / sm
         data_inner += f" {l_val:>{cw}.4f} {a_val:>{cw}.4f}"
 
     overall_label = "OVERALL"
@@ -941,7 +895,6 @@ def evaluate(
 
     sep_inner = "─" * table_inner_width
 
-    # v10-FIX-A: top border interior = table_inner_width + 2 chars total
     top_label  = f" Val @ step {step} "
     top_fill   = "─" * max(0, table_inner_width - len(top_label))
     top_border = f"┌─{top_label}{top_fill}─┐"
@@ -958,9 +911,9 @@ def evaluate(
 
     results: Dict[str, float] = {"loss": overall_loss, "top1_acc": overall_acc}
     for lang, agg in lang_agg.items():
-        sm = max(agg[2], 1e-9)
-        results[f"loss_{lang}"] = agg[0] / sm
-        results[f"acc_{lang}"]  = agg[1] / sm
+        sm = max(agg[2].item(), 1e-9)
+        results[f"loss_{lang}"] = agg[0].item() / sm
+        results[f"acc_{lang}"]  = agg[1].item() / sm
     return results
 
 
@@ -1003,6 +956,9 @@ def main() -> None:
     model, phone_attr, phone_emb_mod = build_t2s_model(
         args.config, device
     )
+    
+    # FIX: Compile model to reduce kernel launch overhead
+    model = torch.compile(model, mode="reduce-overhead", fullgraph=False)
 
     train_specs   = parse_manifest_specs(args.train_manifests, "--train-manifest")
     val_specs     = parse_manifest_specs(args.val_manifests,   "--val-manifest")
@@ -1016,10 +972,12 @@ def main() -> None:
 
     pin = device.type == "cuda"
     pw  = args.num_workers > 0
+    
+    # FIX: Update dataloader to use 12 workers and prefetch_factor=4
     train_loader = DataLoader(
         train_dataset, batch_size=args.batch_size, sampler=train_sampler,
-        num_workers=args.num_workers, collate_fn=collate_t2s,
-        pin_memory=pin, persistent_workers=pw, drop_last=True,
+        num_workers=12, collate_fn=collate_t2s,
+        pin_memory=pin, persistent_workers=pw, prefetch_factor=4, drop_last=True,
     )
     val_loader = DataLoader(
         val_dataset, batch_size=args.batch_size, shuffle=False,
@@ -1139,11 +1097,10 @@ def main() -> None:
                   f"BestValLoss={best_val_loss:.4f}")
             print(f"{'═'*80}")
 
-            # [v13-FIX-C] epoch_ce / epoch_acc removed — derived from epoch_lang raw sums
-            # epoch_lang[lang] = [sum_raw_ce, sum_correct_tokens, sum_valid_tokens]
+            # FIX: initialize as tensors to avoid syncs
             epoch_batches = 0
             accum_counter = 0
-            epoch_lang: Dict[str, List] = defaultdict(lambda: [0.0, 0.0, 0.0])
+            epoch_lang: Dict[str, List] = defaultdict(lambda: [torch.tensor(0.0, device=device), torch.tensor(0.0, device=device), torch.tensor(0.0, device=device)])
 
             for batch in train_loader:
                 if batch is None:
@@ -1159,7 +1116,6 @@ def main() -> None:
                     logits, final_mask, x0 = _model_forward(
                         model, codes, x_mask, phones, phone_mask
                     )
-                    # ce_all/mask_f are detached [v12-FIX-A]; graph freed after backward
                     ce_loss, ce_all, mask_f = _masked_ce_loss_with_raw(
                         logits, final_mask, x0
                     )
@@ -1191,12 +1147,8 @@ def main() -> None:
                     global_step  += 1
                     accum_counter = 0
 
-                    with torch.amp.autocast("cuda", dtype=amp_dtype, enabled=use_amp):
-                        acc = compute_accuracy(logits, final_mask, x0)
-
                     epoch_batches += 1
 
-                    # Accumulate raw token sums for epoch summary [v13-FIX-C]
                     _accum_epoch_lang_from_raw(
                         ce_all, mask_f, logits, final_mask, x0,
                         languages, device, epoch_lang
@@ -1204,8 +1156,9 @@ def main() -> None:
 
                     # ── Logging ───────────────────────────────────────────
                     if global_step % args.log_interval == 0:
-                        # per_lang_metrics only at log steps — correct token-avg for this batch
+                        # FIX: Moved accuracy calculation inside log block to save time
                         with torch.amp.autocast("cuda", dtype=amp_dtype, enabled=use_amp):
+                            acc = compute_accuracy(logits, final_mask, x0)
                             lm = per_lang_metrics(logits, final_mask, x0, languages, device)
 
                         lrs   = scheduler.get_last_lr()
@@ -1307,12 +1260,12 @@ def main() -> None:
 
             optimizer.zero_grad(set_to_none=True)
 
-            # ── Epoch summary [v13-FIX-C] ─────────────────────────────────────
-            # Derive overall metrics from raw token sums — token-weighted averages
+            # ── Epoch summary ─────────────────────────────────────────────
             if epoch_batches > 0:
-                total_sum_ce      = sum(v[0] for v in epoch_lang.values())
-                total_sum_correct = sum(v[1] for v in epoch_lang.values())
-                total_sum_m       = sum(v[2] for v in epoch_lang.values())
+                # FIX: call .item() only once at the end
+                total_sum_ce      = sum(v[0].item() for v in epoch_lang.values())
+                total_sum_correct = sum(v[1].item() for v in epoch_lang.values())
+                total_sum_m       = sum(v[2].item() for v in epoch_lang.values())
                 avg_ce  = total_sum_ce      / max(total_sum_m, 1.0)
                 avg_acc = total_sum_correct / max(total_sum_m, 1.0)
                 writer.add_scalar("Epoch/train_loss", avg_ce,  epoch)
@@ -1320,10 +1273,10 @@ def main() -> None:
                 print(f"\n  [Epoch {epoch+1}] AvgCE={avg_ce:.4f} | "
                       f"AvgAcc={avg_acc:.4f} | Steps={epoch_batches}")
                 for lang in ALL_LANGUAGES:
-                    if lang in epoch_lang and epoch_lang[lang][2] > 0:
-                        sm = epoch_lang[lang][2]
-                        el = epoch_lang[lang][0] / sm
-                        ea = epoch_lang[lang][1] / sm
+                    if lang in epoch_lang and epoch_lang[lang][2].item() > 0:
+                        sm = max(epoch_lang[lang][2].item(), 1e-9)
+                        el = epoch_lang[lang][0].item() / sm
+                        ea = epoch_lang[lang][1].item() / sm
                         print(f"    [{lang}] loss={el:.4f} acc={ea:.4f}")
                         writer.add_scalar(f"Epoch/loss_{lang}", el, epoch)
                         writer.add_scalar(f"Epoch/acc_{lang}",  ea, epoch)
