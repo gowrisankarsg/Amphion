@@ -1064,7 +1064,23 @@ def main() -> None:
         if rpath.exists():
             print(f"[Resume] Loading: {rpath}")
             ckpt = torch.load(rpath, map_location=device, weights_only=False)
-            model.load_state_dict(ckpt["model"])
+            # --- FIX: Handle torch.compile prefix mismatch ---
+            state_dict = ckpt["model"]
+            compiled_prefix = "_orig_mod."
+            
+            # Check if model is compiled but checkpoint is NOT
+            model_is_compiled = any(k.startswith(compiled_prefix) for k in model.state_dict().keys())
+            ckpt_is_compiled = any(k.startswith(compiled_prefix) for k in state_dict.keys())
+            
+            if model_is_compiled and not ckpt_is_compiled:
+                print("[Resume] Adding '_orig_mod.' prefix to match compiled model...")
+                state_dict = {compiled_prefix + k: v for k, v in state_dict.items()}
+            elif not model_is_compiled and ckpt_is_compiled:
+                print("[Resume] Stripping '_orig_mod.' prefix to match uncompiled model...")
+                state_dict = {k.replace(compiled_prefix, "", 1): v for k, v in state_dict.items()}
+            # ------------------------------------------------
+            
+            model.load_state_dict(state_dict)
             optimizer.load_state_dict(ckpt["optimizer"])
             if ckpt.get("scheduler") and scheduler:
                 scheduler.load_state_dict(ckpt["scheduler"])
