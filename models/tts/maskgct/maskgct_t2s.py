@@ -159,7 +159,7 @@ class MaskGCT_T2S(nn.Module):
 
     #     return xt, new_t, mask, prompt_len, mask_prob
 
-        def forward_diffusion(self, x0, t):
+    def forward_diffusion(self, x0, t):
         # x0: semantic tokens (B, T)
         new_t = t
         mask_prob = self.mask_prob(new_t)  # (B,)
