@@ -967,7 +967,7 @@ def main() -> None:
     )
     
     # FIX: Compile model to reduce kernel launch overhead
-    model = torch.compile(model, mode="reduce-overhead", fullgraph=False)
+    model = torch.compile(model, mode="default", fullgraph=False)
 
     train_specs   = parse_manifest_specs(args.train_manifests, "--train-manifest")
     val_specs     = parse_manifest_specs(args.val_manifests,   "--val-manifest")
