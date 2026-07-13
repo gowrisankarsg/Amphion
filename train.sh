@@ -3,8 +3,11 @@ set -euo pipefail
 
 
 export CUDA_VISIBLE_DEVICES=0
-export T2S_RUN_NAME="maskgct_t2s_v13_run1"
+export T2S_RUN_NAME="maskgct_t2s_v14_optimized"
 export PYTORCH_ALLOC_CONF=expandable_segments:True
+
+# FIX: Prevents tokenizer deadlocks and multiprocessing warnings
+export TOKENIZERS_PARALLELISM=false
 
 
 python train_maskgct_t2s.py \
@@ -17,13 +20,13 @@ python train_maskgct_t2s.py \
   --val-manifest /teamspace/studios/this_studio/dataset/ta/ta/ta_val.jsonl::ta \
   --val-manifest /teamspace/studios/this_studio/dataset/en/en/en_val.jsonl::en \
   --val-manifest /teamspace/studios/this_studio/dataset/zh/zh/zh_val.jsonl::zh \
-  --batch-size 30 \
-  --grad-accumulation 8 \
-  --epochs 1 \
+  --batch-size 40 \
+  --grad-accumulation 10 \
+  --epochs 2 \
   --learning-rate 2e-5 \
   --backbone-lr-scale 0.1 \
   --weight-decay 0.01 \
-  --warmup-steps 500 \
+  --warmup-steps 200 \
   --grad-clip 1.0 \
   --num-workers 8 \
   --seed 42 \
@@ -35,4 +38,4 @@ python train_maskgct_t2s.py \
   --ewc-lambda 5000 \
   --amp \
   --ewc-fisher-batches 10 \
-  --resume /teamspace/studios/this_studio/output_maskgct_t2s/emergency_step1593.pth
+  --init-ckpt /teamspace/studios/this_studio/output_maskgct_t2s/step_0002000.pth
