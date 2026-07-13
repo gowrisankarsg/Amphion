@@ -77,6 +77,15 @@ import safetensors.torch
 
 from models.tts.maskgct.maskgct_t2s import MaskGCT_T2S
 from utils.util import load_config
+import datetime
+import warnings
+import logging
+
+# Silence torch.compile and dynamo warnings
+warnings.filterwarnings("ignore")
+logging.getLogger("torch").setLevel(logging.ERROR)
+logging.getLogger("torch._inductor").setLevel(logging.ERROR)
+logging.getLogger("torch._dynamo").setLevel(logging.ERROR)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Constants
@@ -228,8 +237,8 @@ class T2SDataset(Dataset):
                 print(f"  [{lang:>4}] {len(idxs):>8,}")
 
         # FIX: Add LRU cache so workers cache .npy files in RAM instead of reading disk every time
-        self._codes_cache = lru_cache(maxsize=100_000)(self._load_npy)
-        self._phones_cache = lru_cache(maxsize=100_000)(self._load_npy)
+        self._codes_cache = lru_cache(maxsize=600_000)(self._load_npy)
+        self._phones_cache = lru_cache(maxsize=600_000)(self._load_npy)
 
     @staticmethod
     def _load_npy(path_str: str):
@@ -1053,7 +1062,23 @@ def main() -> None:
       if ipath.exists():
           print(f"[Init] Loading model-only weights: {ipath}")
           ckpt = torch.load(ipath, map_location=device, weights_only=False)
-          model.load_state_dict(ckpt["model"], strict=False)
+          # --- FIX: Handle torch.compile prefix mismatch ---
+          state_dict = ckpt["model"]
+          compiled_prefix = "_orig_mod."
+          
+          # Check if model is compiled but checkpoint is NOT
+          model_is_compiled = any(k.startswith(compiled_prefix) for k in model.state_dict().keys())
+          ckpt_is_compiled = any(k.startswith(compiled_prefix) for k in state_dict.keys())
+          
+          if model_is_compiled and not ckpt_is_compiled:
+              print("[Init] Adding '_orig_mod.' prefix to match compiled model...")
+              state_dict = {compiled_prefix + k: v for k, v in state_dict.items()}
+          elif not model_is_compiled and ckpt_is_compiled:
+              print("[Init] Stripping '_orig_mod.' prefix to match uncompiled model...")
+              state_dict = {k.replace(compiled_prefix, "", 1): v for k, v in state_dict.items()}
+          # ------------------------------------------------
+          
+          model.load_state_dict(state_dict, strict=False)
           del ckpt
           print("[Init] Optimizer/scheduler/scaler reset. Starting fresh from loaded weights.")
       else:
@@ -1183,8 +1208,11 @@ def main() -> None:
                         gn    = (grad_norm.item()
                                  if isinstance(grad_norm, torch.Tensor)
                                  else float(grad_norm))
+                        # Get current time
+                        now_time = datetime.datetime.now().strftime("%H:%M:%S")
+                        
                         print(
-                            f"  Step {global_step:6d}/{total_steps} | "
+                            f" [{now_time}] Step {global_step:6d}/{total_steps} | "
                             f"CE={ce_loss.item():.4f} | Acc={acc:.4f} | "
                             f"LR_bb={lr_bb:.2e} | LR_pe={lr_pe:.2e} | GNorm={gn:.3f}"
                             + (f" | EWC={ewc_loss.item():.4f}" if ewc else "")
