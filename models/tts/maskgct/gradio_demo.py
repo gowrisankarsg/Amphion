@@ -20,7 +20,7 @@ from models.tts.maskgct.maskgct_t2s import MaskGCT_T2S
 from models.codec.amphion_codec.codec import CodecEncoder, CodecDecoder
 from transformers import Wav2Vec2BertModel
 from utils.util import load_config
-from models.tts.maskgct.g2p.g2p_generation import g2p, chn_eng_g2p
+from models.tts.maskgct.g2p.g2p_generation import g2p, chn_eng_tam_g2p
 
 from transformers import SeamlessM4TFeatureExtractor
 import py3langid as langid
@@ -76,8 +76,8 @@ def get_prompt_text(speech_16k, language):
 
 
 def g2p_(text, language):
-    if language in ["zh", "en"]:
-        return chn_eng_g2p(text)
+    if language in ["zh", "en", "ta", "te", "ml", "kn", "hi"]:
+        return chn_eng_tam_g2p(text)
     else:
         return g2p(text, sentence=None, language=language)
 
@@ -406,7 +406,7 @@ def inference(
 ) = load_models()
 
 # Language list
-language_list = ["en", "zh", "ja", "ko", "fr", "de"]
+language_list = ["en", "zh", "ja", "ko", "fr", "de", "ta", "te", "ml", "kn", "hi"]
 
 # Gradio interface
 iface = gr.Interface(
