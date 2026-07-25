@@ -23,7 +23,7 @@ from transformers import SeamlessM4TFeatureExtractor
 
 
 def g2p_(text, language):
-    if language in ["zh", "en", "ta"]:
+    if language in ["zh", "en", "ta", "te", "ml", "kn", "hi"]:
         return chn_eng_tam_g2p(text)
     else:
         return g2p(text, sentence=None, language=language)
