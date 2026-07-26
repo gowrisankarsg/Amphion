@@ -17,6 +17,7 @@ pypinyin
 #LangSegment
 pyopenjtalk
 pykakasi
+py3langid
 
 json5
 black
