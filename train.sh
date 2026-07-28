@@ -31,11 +31,11 @@ python train_maskgct_t2s.py \
   --num-workers 15 \
   --seed 42 \
   --lang-balance "ta:6,en:2,zh:2" \
-  --log-interval 50 \
-  --val-interval 500 \
-  --save-every 1000 \
+  --log-interval 25 \
+  --val-interval 100 \
+  --save-every 500 \
   --keep-last 3 \
   --ewc-lambda 5000 \
   --amp \
   --ewc-fisher-batches 10 \
-  --init-ckpt /teamspace/studios/this_studio/output_maskgct_t2s/step_0002000.pth
+  --init-ckpt /teamspace/studios/this_studio/output_maskgct_t2s/best_model.pth
