@@ -20,15 +20,15 @@ python train_maskgct_t2s.py \
   --val-manifest /teamspace/studios/this_studio/dataset/ta/ta/ta_val.jsonl::ta \
   --val-manifest /teamspace/studios/this_studio/dataset/en/en/en_val.jsonl::en \
   --val-manifest /teamspace/studios/this_studio/dataset/zh/zh/zh_val.jsonl::zh \
-  --batch-size 40 \
+  --batch-size 50 \
   --grad-accumulation 10 \
   --epochs 2 \
-  --learning-rate 2e-5 \
+  --learning-rate 4e-5 \
   --backbone-lr-scale 0.1 \
   --weight-decay 0.01 \
-  --warmup-steps 200 \
+  --warmup-steps 50 \
   --grad-clip 1.0 \
-  --num-workers 8 \
+  --num-workers 15 \
   --seed 42 \
   --lang-balance "ta:6,en:2,zh:2" \
   --log-interval 50 \
